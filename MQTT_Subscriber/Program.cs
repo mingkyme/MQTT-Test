@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using uPLibrary.Networking.M2Mqtt;
+using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
 
 namespace MQTT_Subscriber
 {
@@ -11,21 +12,32 @@ namespace MQTT_Subscriber
     {
         static void Main(string[] args)
         {
-            MqttClient client = new MqttClient("127.0.0.1");
-            client.Connect("mingkyme");
-            client.Subscribe(new string[] { "work/mingkyme" }, new byte[] { 2 });
-            client.MqttMsgPublishReceived += Client_MqttMsgPublishReceived;
-            client.MqttMsgSubscribed += Client_MqttMsgSubscribed;
-        }
-        private static void Client_MqttMsgSubscribed(object sender, uPLibrary.Networking.M2Mqtt.Messages.MqttMsgSubscribedEventArgs e)
-        {
-            Console.WriteLine("Client_MqttMsgSubscribed");
-        }
+            var factory = new ConnectionFactory() { HostName = "localhost" };
+            using (var connection = factory.CreateConnection())
+            using (var channel = connection.CreateModel())
+            {
+                channel.QueueDeclare(queue: "hello",
+                                     durable: false,
+                                     exclusive: false,
+                                     autoDelete: false,
+                                     arguments: null);
 
-        private static void Client_MqttMsgPublishReceived(object sender, uPLibrary.Networking.M2Mqtt.Messages.MqttMsgPublishEventArgs e)
-        {
-            Console.WriteLine(Encoding.UTF8.GetString(e.Message));
+                var consumer = new EventingBasicConsumer(channel);
+                consumer.Received += (model, ea) =>
+                {
+                    var body = ea.Body;
+                    var message = Encoding.UTF8.GetString(body);
+                    Console.WriteLine(" [x] Received {0}", message);
+                };
+                channel.BasicConsume(queue: "hello",
+                                     autoAck: true,
+                                     consumer: consumer);
+
+                Console.WriteLine(" Press [enter] to exit.");
+                Console.ReadLine();
+            }
+
 
         }
-    }
+}
 }
